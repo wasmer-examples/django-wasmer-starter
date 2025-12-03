@@ -1,6 +1,6 @@
-# Django + Wasmer
+# Django + Wasmer Edge
 
-This example shows how to use Django 5 on Wasmer Edge.
+This example shows how to run a standard **Django 5** project on **Wasmer Edge**.
 
 ## Demo
 
@@ -8,91 +8,35 @@ https://django-template.wasmer.app/
 
 ## How it Works
 
-Our Django application, `example` is configured as an installed application in `api/settings.py`:
+Key files to know:
 
-```python
-# api/settings.py
-INSTALLED_APPS = [
-    # ...
-    'example',
-]
-```
+* `api/settings.py`
+  * Adds the sample app (`'example'`) to `INSTALLED_APPS`.
+  * Sets `ALLOWED_HOSTS = ['127.0.0.1', '.wasmer.app']` so both local development and Wasmer Edge subdomains work.
+  * Points `WSGI_APPLICATION` to `api.wsgi.app`, meaning Wasmer will import `api/wsgi.py` and look for `app`.
+* `api/wsgi.py`
+  * Calls `get_wsgi_application()` and exposes it as a module-level variable named `app` (the entrypoint Wasmer runs).
+* `example/views.py`
+  * Defines `index(request)` which renders the current time in a simple HTML page.
+* `example/urls.py` and `api/urls.py`
+  * Wire the `index` view to the root URL (`/`) and include it in the project’s root URL patterns.
 
-We allow "\*.wasmer.app" subdomains in `ALLOWED_HOSTS`, in addition to 127.0.0.1:
-
-```python
-# api/settings.py
-ALLOWED_HOSTS = ['127.0.0.1', '.wasmer.app']
-```
-
-The `wsgi` module must use a public variable named `app` to expose the WSGI application:
-
-```python
-# api/wsgi.py
-app = get_wsgi_application()
-```
-
-The corresponding `WSGI_APPLICATION` setting is configured to use the `app` variable from the `api.wsgi` module:
-
-```python
-# api/settings.py
-WSGI_APPLICATION = 'api.wsgi.app'
-```
-
-There is a single view which renders the current time in `example/views.py`:
-
-```python
-# example/views.py
-from datetime import datetime
-
-from django.http import HttpResponse
-
-
-def index(request):
-    now = datetime.now()
-    html = f'''
-    <html>
-        <body>
-            <h1>Hello from Wasmer!</h1>
-            <p>The current time is { now }.</p>
-        </body>
-    </html>
-    '''
-    return HttpResponse(html)
-```
-
-This view is exposed a URL through `example/urls.py`:
-
-```python
-# example/urls.py
-from django.urls import path
-
-from example.views import index
-
-
-urlpatterns = [
-    path('', index),
-]
-```
-
-Finally, it's made accessible to the Django server inside `api/urls.py`:
-
-```python
-# api/urls.py
-from django.urls import path, include
-
-urlpatterns = [
-    ...
-    path('', include('example.urls')),
-]
-```
-
-This example uses the Web Server Gateway Interface (WSGI) with Django to enable handling requests on Wasmer Edge.
+Because Django serves via WSGI, Wasmer Edge runs the project without extra adapters.
 
 ## Running Locally
 
 ```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt  # or pip install django
+python manage.py migrate
 python manage.py runserver
 ```
 
-Your Django application is now available at `http://localhost:8000`.
+Visit `http://127.0.0.1:8000/` to see the “Hello from Wasmer!” page with the current timestamp.
+
+## Deploying to Wasmer (Overview)
+
+1. Collect static files and apply migrations as part of your build (e.g., `python manage.py collectstatic --no-input`).
+2. Ensure `api.wsgi:app` is the entrypoint in your deployment configuration.
+3. Deploy to Wasmer Edge and browse to `https://<your-subdomain>.wasmer.app/`.
